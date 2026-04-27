@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Employee Panel — Courier System</title>
+<link rel="stylesheet" th:href="@{/css/style.css}"/>
+</head>
+<body>
+<div class="app-container">
+
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">🚚 Employee Panel</div>
+      <div class="header-right">
+        <span id="emp-name-badge" class="user-badge"></span>
+        <button class="btn btn-ghost-sm" onclick="logout()">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="main two-panel">
+    <nav class="sidebar">
+      <button class="menu-item active" onclick="showSection('deliveries',this)">📋 My Deliveries</button>
+      <button class="menu-item"        onclick="showSection('update-status',this)">🔄 Update Status</button>
+      <button class="menu-item"        onclick="showSection('availability',this)">📅 Change Availability</button>
+    </nav>
+
+    <section class="content">
+
+      <!-- My Deliveries -->
+      <div id="sec-deliveries" class="section-panel">
+        <div class="section-header">
+          <h3>📋 My Assigned Deliveries</h3>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn btn-sm" onclick="loadDeliveries()">🔄 Refresh</button>
+            <button class="btn btn-sm" style="background:#1a7f4b;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-weight:600;" onclick="downloadDeliveryReport()">📥 Download My Report</button>
+          </div>
+        </div>
+        <div id="deliveries-error" class="alert alert-error hidden"></div>
+        <div id="deliveries-wrap"></div>
+      </div>
+
+      <!-- Update Status -->
+      <div id="sec-update-status" class="section-panel hidden">
+        <h3>🔄 Update Courier Status</h3>
+        <div id="upd-error"   class="alert alert-error   hidden"></div>
+        <div id="upd-success" class="alert alert-success hidden"></div>
+        <div class="form-group">
+          <label>Tracking ID</label>
+          <input id="upd-tid" type="number" class="form-input" placeholder="e.g. 1" min="1"/>
+        </div>
+        <div class="form-group">
+          <label>New Status</label>
+          <select id="upd-status" class="form-input">
+            <option value="Booked">Booked</option>
+            <option value="In Transit">In Transit</option>
+            <option value="Out for Delivery">Out for Delivery</option>
+            <option value="Delivered">Delivered</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" onclick="updateStatus()">Update Status</button>
+      </div>
+
+      <!-- Change Availability -->
+      <div id="sec-availability" class="section-panel hidden">
+        <h3>📅 Change My Availability</h3>
+        <div id="avail-error"   class="alert alert-error   hidden"></div>
+        <div id="avail-success" class="alert alert-success hidden"></div>
+        <div class="form-group">
+          <label>Set Availability</label>
+          <div class="radio-group">
+            <label class="radio-label"><input type="radio" name="avail" value="FREE" checked/> ✅ FREE</label>
+            <label class="radio-label"><input type="radio" name="avail" value="ON_LEAVE"/> 🏖️ ON_LEAVE</label>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="changeAvailability()">Update</button>
+      </div>
+
+    </section>
+  </main>
+</div>
+
+<script>
+  const username    = sessionStorage.getItem('username') || '';
+  const role        = sessionStorage.getItem('role')     || '';
+  const displayName = sessionStorage.getItem('name')     || username;
+  if (role !== 'EMPLOYEE') { window.location.href = '/'; }
+  document.getElementById('emp-name-badge').textContent = '👤 ' + displayName;
+
+  function logout() { sessionStorage.clear(); window.location.href = '/'; }
+
+  function showSection(id, btn) {
+    document.querySelectorAll('.section-panel').forEach(el => el.classList.add('hidden'));
+    document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
+    document.getElementById('sec-' + id).classList.remove('hidden');
+    if (btn) btn.classList.add('active');
+    if (id === 'deliveries') loadDeliveries();
+  }
+
+  function showMsg(id, msg, isError) {
+    const el = document.getElementById(id);
+    el.textContent = msg;
+    el.className = 'alert ' + (isError ? 'alert-error' : 'alert-success');
+    el.classList.remove('hidden');
+    setTimeout(() => el.classList.add('hidden'), 6000);
+  }
+
+  async function apiFetch(url, options) {
+    try {
+      const r    = await fetch(url, options);
+      const data = await r.json();
+      return { ok: r.ok, data };
+    } catch (err) {
+      return { ok: false, data: { message: 'Network error — is the server running?' } };
+    }
+  }
+
+  async function loadDeliveries() {
+    const wrap  = document.getElementById('deliveries-wrap');
+    const errEl = document.getElementById('deliveries-error');
+    errEl.classList.add('hidden');
+    wrap.innerHTML = '<p class="empty">⏳ Loading...</p>';
+    const { ok, data } = await apiFetch(`/api/employee/${username}/deliveries`);
+    if (!ok) {
+      errEl.textContent = data.message || 'Failed to load deliveries.';
+      errEl.classList.remove('hidden');
+      wrap.innerHTML = '';
+      return;
+    }
+    if (!Array.isArray(data) || !data.length) {
+      wrap.innerHTML = '<p class="empty">No deliveries assigned to you yet.</p>'; return;
+    }
+    const ths = ['Tracking ID','Receiver','Destination','Weight','Status','Cost','Payment'].map(h=>`<th>${h}</th>`).join('');
+    const trs = data.map(c =>
+      `<tr><td>#${c.trackingId}</td><td>${c.receiverName}</td><td>${c.destination}</td>
+       <td>${c.weight} kg</td>
+       <td><span class="badge badge-status">${c.status}</span></td>
+       <td>₹${c.cost}</td>
+       <td><span class="badge badge-${(c.paymentStatus||'').toLowerCase()}">${c.paymentStatus}</span></td></tr>`
+    ).join('');
+    wrap.innerHTML = `<div class="table-wrap"><table class="data-table"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div>`;
+  }
+
+  async function updateStatus() {
+    const tidRaw = document.getElementById('upd-tid').value.trim();
+    const tid    = parseInt(tidRaw, 10);
+    if (!tidRaw || isNaN(tid) || tid <= 0) {
+      showMsg('upd-error', 'Enter a valid Tracking ID.', true); return;
+    }
+    const status = document.getElementById('upd-status').value;
+    const { ok, data } = await apiFetch(`/api/employee/couriers/${tid}/status`, {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ status, empUsername: username })
+    });
+    if (!ok) { showMsg('upd-error', data.message || 'Update failed!', true); return; }
+    showMsg('upd-success', `✅ ${data.message || 'Status updated to: '+status}`, false);
+    if (status === 'Delivered') loadDeliveries();
+  }
+
+  async function changeAvailability() {
+    const avail = document.querySelector('input[name="avail"]:checked').value;
+    const { ok, data } = await apiFetch('/api/employee/availability', {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ empUsername: username, availability: avail })
+    });
+    if (!ok) { showMsg('avail-error', data.message || 'Failed!', true); return; }
+    showMsg('avail-success', `✅ ${data.message || 'Availability set to: '+avail}`, false);
+  }
+
+  // Auto-load deliveries on page open
+  loadDeliveries();
+
+  function downloadDeliveryReport() {
+    const btn = event.target;
+    btn.textContent = '⏳ Generating...';
+    btn.disabled = true;
+    fetch(`/api/employee/${username}/delivery-report`)
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to generate report');
+        return res.blob();
+      })
+      .then(blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const today = new Date();
+        const dateStr = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+        a.href = url;
+        a.download = 'delivery_report_' + username + '_' + dateStr + '.xlsx';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      })
+      .catch(err => alert('Error: ' + err.message))
+      .finally(() => { btn.textContent = '📥 Download My Report'; btn.disabled = false; });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Courier System</title>
+<link rel="stylesheet" th:href="@{/css/style.css}"/>
+</head>
+<body>
+<div class="app-container">
+
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">📦 CourierSystem</div>
+      <p class="tagline">Fast · Reliable · Trackable</p>
+    </div>
+  </header>
+
+  <main class="main">
+    <div class="card welcome-card">
+      <h2>Welcome! Who are you?</h2>
+      <p class="subtitle">Select your role to continue</p>
+      <div class="role-grid">
+        <button class="role-btn admin-btn"    onclick="showPanel('admin')">
+          <span class="role-icon">🛡️</span><br/>Admin
+        </button>
+        <button class="role-btn employee-btn" onclick="showPanel('employee')">
+          <span class="role-icon">🚚</span><br/>Employee
+        </button>
+        <button class="role-btn customer-btn" onclick="showPanel('customer')">
+          <span class="role-icon">📬</span><br/>Customer
+        </button>
+      </div>
+    </div>
+
+    <!-- Admin Login -->
+    <div id="panel-admin" class="card login-card hidden">
+      <h3>🛡️ Admin Login</h3>
+      <div id="admin-error" class="alert alert-error hidden"></div>
+      <div class="form-group">
+        <label>Username</label>
+        <input id="admin-user" type="text" placeholder="admin" class="form-input"/>
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input id="admin-pass" type="password" placeholder="••••••••" class="form-input"
+               onkeydown="if(event.key==='Enter')adminLogin()"/>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="adminLogin()">Login</button>
+        <button class="btn btn-ghost"   onclick="hideAll()">← Back</button>
+      </div>
+    </div>
+
+    <!-- Employee Login -->
+    <div id="panel-employee" class="card login-card hidden">
+      <h3>🚚 Employee Login</h3>
+      <div id="emp-error" class="alert alert-error hidden"></div>
+      <div class="form-group">
+        <label>Username</label>
+        <input id="emp-user" type="text" placeholder="karthi" class="form-input"/>
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input id="emp-pass" type="password" placeholder="••••••••" class="form-input"
+               onkeydown="if(event.key==='Enter')employeeLogin()"/>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="employeeLogin()">Login</button>
+        <button class="btn btn-ghost"   onclick="hideAll()">← Back</button>
+      </div>
+    </div>
+
+    <!-- Customer Choice -->
+    <div id="panel-customer" class="card login-card hidden">
+      <h3>📬 Customer Portal</h3>
+      <div class="role-grid two-col">
+        <button class="role-btn" onclick="showPanel('cust-register')">
+          <span class="role-icon">✏️</span><br/>New Customer
+        </button>
+        <button class="role-btn" onclick="showPanel('cust-login')">
+          <span class="role-icon">🔑</span><br/>Existing Customer
+        </button>
+      </div>
+      <button class="btn btn-ghost mt-1" onclick="hideAll()">← Back</button>
+    </div>
+
+    <!-- Customer Register -->
+    <div id="panel-cust-register" class="card login-card hidden">
+      <h3>✏️ Register</h3>
+      <div id="reg-error"   class="alert alert-error   hidden"></div>
+      <div id="reg-success" class="alert alert-success hidden"></div>
+      <div class="form-group"><label>Username</label>
+        <input id="reg-user"  type="text"     class="form-input" placeholder="john_doe"/></div>
+      <div class="form-group"><label>Password</label>
+        <input id="reg-pass"  type="password" class="form-input" placeholder="••••••••"/></div>
+      <div class="form-group"><label>Full Name</label>
+        <input id="reg-name"  type="text"     class="form-input" placeholder="John Doe"/></div>
+      <div class="form-group"><label>Address</label>
+        <input id="reg-addr"  type="text"     class="form-input" placeholder="123 Main St"/></div>
+      <div class="form-group"><label>Phone</label>
+        <input id="reg-phone" type="number"   class="form-input" placeholder="9876543210"/></div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="registerCustomer()">Register</button>
+        <button class="btn btn-ghost"   onclick="showPanel('customer')">← Back</button>
+      </div>
+    </div>
+
+    <!-- Customer Login -->
+    <div id="panel-cust-login" class="card login-card hidden">
+      <h3>🔑 Customer Login</h3>
+      <div id="cust-error" class="alert alert-error hidden"></div>
+      <div class="form-group"><label>Username</label>
+        <input id="cust-user" type="text"     class="form-input" placeholder="john_doe"/></div>
+      <div class="form-group"><label>Password</label>
+        <input id="cust-pass" type="password" class="form-input" placeholder="••••••••"
+               onkeydown="if(event.key==='Enter')customerLogin()"/></div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="customerLogin()">Login</button>
+        <button class="btn btn-ghost"   onclick="showPanel('customer')">← Back</button>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  // Clear any stale session on landing page
+  sessionStorage.clear();
+
+  const panels = ['admin','employee','customer','cust-register','cust-login'];
+  function hideAll()      { panels.forEach(p => document.getElementById('panel-'+p)?.classList.add('hidden')); }
+  function showPanel(id)  { hideAll(); document.getElementById('panel-'+id)?.classList.remove('hidden'); }
+  function showErr(id,msg){ const e=document.getElementById(id); e.textContent=msg; e.classList.remove('hidden'); }
+  function hideErr(id)    { document.getElementById(id)?.classList.add('hidden'); }
+
+  async function apiPost(url, body) {
+    try {
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await r.json();
+      return { ok: r.ok, data };
+    } catch (err) {
+      return { ok: false, data: { message: 'Network error — is the server running?' } };
+    }
+  }
+
+  // ADMIN LOGIN — uses /api/admin/login so wrong-role gives a proper 401 error
+  async function adminLogin() {
+    hideErr('admin-error');
+    const u = document.getElementById('admin-user').value.trim();
+    const p = document.getElementById('admin-pass').value;
+    if (!u || !p) { showErr('admin-error','Please enter username and password.'); return; }
+    const { ok, data } = await apiPost('/api/admin/login', { username: u, password: p });
+    if (!ok) { showErr('admin-error', data.message || 'Invalid admin credentials!'); return; }
+    sessionStorage.setItem('username', data.username);
+    sessionStorage.setItem('role', 'ADMIN');
+    window.location.href = '/admin';
+  }
+
+  // EMPLOYEE LOGIN — uses /api/employee/login so wrong-role gives a proper 401 error
+  async function employeeLogin() {
+    hideErr('emp-error');
+    const u = document.getElementById('emp-user').value.trim();
+    const p = document.getElementById('emp-pass').value;
+    if (!u || !p) { showErr('emp-error','Please enter username and password.'); return; }
+    const { ok, data } = await apiPost('/api/employee/login', { username: u, password: p });
+    if (!ok) { showErr('emp-error', data.message || 'Invalid employee credentials!'); return; }
+    sessionStorage.setItem('username', data.username);
+    sessionStorage.setItem('name',     data.name || data.username);
+    sessionStorage.setItem('role',     'EMPLOYEE');
+    window.location.href = '/employee';
+  }
+
+  // CUSTOMER REGISTER
+  async function registerCustomer() {
+    hideErr('reg-error'); hideErr('reg-success');
+    const u     = document.getElementById('reg-user').value.trim();
+    const p     = document.getElementById('reg-pass').value;
+    const name  = document.getElementById('reg-name').value.trim();
+    const addr  = document.getElementById('reg-addr').value.trim();
+    const phone = document.getElementById('reg-phone').value.trim();
+    if (!u || !p || !name || !phone) {
+      showErr('reg-error','Username, password, name and phone are required.'); return;
+    }
+    const { ok, data } = await apiPost('/api/auth/register', {
+      username: u, password: p, name, address: addr, phone: Number(phone)
+    });
+    if (!ok) { showErr('reg-error', data.message || 'Registration failed!'); return; }
+    const s = document.getElementById('reg-success');
+    s.textContent = '✅ Registered! Please login now.';
+    s.classList.remove('hidden');
+    setTimeout(() => showPanel('cust-login'), 1800);
+  }
+
+  // CUSTOMER LOGIN — uses /api/customer/login so wrong-role gives a proper 401 error
+  async function customerLogin() {
+    hideErr('cust-error');
+    const u = document.getElementById('cust-user').value.trim();
+    const p = document.getElementById('cust-pass').value;
+    if (!u || !p) { showErr('cust-error','Please enter username and password.'); return; }
+    const { ok, data } = await apiPost('/api/customer/login', { username: u, password: p });
+    if (!ok) { showErr('cust-error', data.message || 'Invalid customer credentials!'); return; }
+    sessionStorage.setItem('username', data.username);
+    sessionStorage.setItem('role',     'CUSTOMER');
+    window.location.href = '/customer';
+  }
+</script>
+</body>
+</html>

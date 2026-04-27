@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Admin Panel — Courier System</title>
+<link rel="stylesheet" th:href="@{/css/style.css}"/>
+</head>
+<body>
+<div class="app-container">
+
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">🛡️ Admin Panel</div>
+      <div class="header-right">
+        <span id="admin-name" class="user-badge"></span>
+        <button class="btn btn-ghost-sm" onclick="logout()">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="main two-panel">
+    <nav class="sidebar">
+      <button class="menu-item active" onclick="showSection('add-emp',this)">➕ Add Employee</button>
+      <button class="menu-item"        onclick="showSection('view-emp',this)">👥 View Employees</button>
+      <button class="menu-item"        onclick="showSection('all-couriers',this)">📦 All Couriers</button>
+      <button class="menu-item"        onclick="showSection('all-payments',this)">💳 All Payments</button>
+      <button class="menu-item"        onclick="showSection('all-customers',this)">🙋 All Customers</button>
+    </nav>
+
+    <section class="content">
+
+      <!-- Add Employee -->
+      <div id="sec-add-emp" class="section-panel">
+        <h3>➕ Add Employee</h3>
+        <div id="add-emp-error"   class="alert alert-error   hidden"></div>
+        <div id="add-emp-success" class="alert alert-success hidden"></div>
+        <div class="form-grid">
+          <div class="form-group"><label>Name</label>
+            <input id="ae-name"  type="text"     class="form-input" placeholder="Full Name"/></div>
+          <div class="form-group"><label>Address</label>
+            <input id="ae-addr"  type="text"     class="form-input" placeholder="City"/></div>
+          <div class="form-group"><label>Phone</label>
+            <input id="ae-phone" type="number"   class="form-input" placeholder="9876543210"/></div>
+          <div class="form-group"><label>Pincode</label>
+            <input id="ae-pin"   type="number"   class="form-input" placeholder="600001" min="100000" max="999999"/></div>
+          <div class="form-group"><label>Username</label>
+            <input id="ae-user"  type="text"     class="form-input" placeholder="emp_username"/></div>
+          <div class="form-group"><label>Password</label>
+            <input id="ae-pass"  type="password" class="form-input" placeholder="••••••••"/></div>
+        </div>
+        <button class="btn btn-primary" onclick="addEmployee()">Add Employee</button>
+      </div>
+
+      <!-- View Employees -->
+      <div id="sec-view-emp" class="section-panel hidden">
+        <div class="section-header">
+          <h3>👥 Employee List</h3>
+          <button class="btn btn-sm" onclick="loadEmployees()">🔄 Refresh</button>
+        </div>
+        <div id="emp-table-error" class="alert alert-error hidden"></div>
+        <div id="emp-table-wrap"></div>
+      </div>
+
+      <!-- All Couriers -->
+      <div id="sec-all-couriers" class="section-panel hidden">
+        <div class="section-header">
+          <h3>📦 All Couriers</h3>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn btn-sm" onclick="loadAllCouriers()">🔄 Refresh</button>
+            <button class="btn btn-sm" style="background:#1a7f4b;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-weight:600;" onclick="downloadDailyReport()">📥 Download Daily Report</button>
+          </div>
+        </div>
+        <div id="couriers-table-error" class="alert alert-error hidden"></div>
+        <div id="couriers-table-wrap"></div>
+      </div>
+
+      <!-- All Payments -->
+      <div id="sec-all-payments" class="section-panel hidden">
+        <div class="section-header">
+          <h3>💳 All Payments</h3>
+          <button class="btn btn-sm" onclick="loadAllPayments()">🔄 Refresh</button>
+        </div>
+        <div id="payments-table-error" class="alert alert-error hidden"></div>
+        <div id="payments-table-wrap"></div>
+      </div>
+
+      <!-- All Customers -->
+      <div id="sec-all-customers" class="section-panel hidden">
+        <div class="section-header">
+          <h3>🙋 All Customers</h3>
+          <button class="btn btn-sm" onclick="loadAllCustomers()">🔄 Refresh</button>
+        </div>
+        <div id="customers-table-error" class="alert alert-error hidden"></div>
+        <div id="customers-table-wrap"></div>
+      </div>
+
+    </section>
+  </main>
+</div>
+
+<script>
+  const username = sessionStorage.getItem('username') || '';
+  const role     = sessionStorage.getItem('role')     || '';
+  if (role !== 'ADMIN') { window.location.href = '/'; }
+  document.getElementById('admin-name').textContent = '👤 ' + username;
+
+  function logout() { sessionStorage.clear(); window.location.href = '/'; }
+
+  function showSection(id, btn) {
+    document.querySelectorAll('.section-panel').forEach(el => el.classList.add('hidden'));
+    document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
+    document.getElementById('sec-' + id).classList.remove('hidden');
+    if (btn) btn.classList.add('active');
+    if (id === 'view-emp')      loadEmployees();
+    if (id === 'all-couriers')  loadAllCouriers();
+    if (id === 'all-payments')  loadAllPayments();
+    if (id === 'all-customers') loadAllCustomers();
+  }
+
+  function showMsg(id, msg, isError) {
+    const el = document.getElementById(id);
+    el.textContent = msg;
+    el.className = 'alert ' + (isError ? 'alert-error' : 'alert-success');
+    el.classList.remove('hidden');
+    setTimeout(() => el.classList.add('hidden'), 6000);
+  }
+
+  async function apiFetch(url, options) {
+    try {
+      const r    = await fetch(url, options);
+      const data = await r.json();
+      return { ok: r.ok, data };
+    } catch (err) {
+      return { ok: false, data: { message: 'Network error — is the server running?' } };
+    }
+  }
+
+  async function addEmployee() {
+    const name    = document.getElementById('ae-name').value.trim();
+    const addr    = document.getElementById('ae-addr').value.trim();
+    const phoneRaw= document.getElementById('ae-phone').value.trim();
+    const pinRaw  = document.getElementById('ae-pin').value.trim();
+    const user    = document.getElementById('ae-user').value.trim();
+    const pass    = document.getElementById('ae-pass').value;
+
+    if (!name || !user || !pass || !phoneRaw || !pinRaw) {
+      showMsg('add-emp-error','Name, phone, pincode, username and password are required.',true); return;
+    }
+    const phone   = Number(phoneRaw);
+    const pincode = Number(pinRaw);
+    if (isNaN(phone) || phone <= 0) { showMsg('add-emp-error','Invalid phone number.',true); return; }
+    if (isNaN(pincode)||pincode<100000||pincode>999999) { showMsg('add-emp-error','Enter a valid 6-digit pincode.',true); return; }
+
+    const { ok, data } = await apiFetch('/api/admin/employees', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ name, address: addr, phone, pincode, username: user, password: pass })
+    });
+    if (!ok) { showMsg('add-emp-error', data.message || 'Failed to add employee!', true); return; }
+    showMsg('add-emp-success', `✅ Employee Added! ID: ${data.empId} | Username: ${data.username}`, false);
+    ['ae-name','ae-addr','ae-phone','ae-pin','ae-user','ae-pass'].forEach(id => document.getElementById(id).value='');
+  }
+
+  async function loadTable(apiUrl, wrapId, errId, headers, mapper) {
+    const wrap  = document.getElementById(wrapId);
+    const errEl = document.getElementById(errId);
+    errEl.classList.add('hidden');
+    wrap.innerHTML = '<p class="empty">⏳ Loading...</p>';
+    const { ok, data } = await apiFetch(apiUrl);
+    if (!ok) { errEl.textContent = data.message||'Failed to load.'; errEl.classList.remove('hidden'); wrap.innerHTML=''; return; }
+    if (!Array.isArray(data)||!data.length) { wrap.innerHTML='<p class="empty">No records found.</p>'; return; }
+    const ths = headers.map(h=>`<th>${h}</th>`).join('');
+    const trs = data.map(mapper).map(row=>'<tr>'+row.map(cell=>`<td>${cell}</td>`).join('')+'</tr>').join('');
+    wrap.innerHTML=`<div class="table-wrap"><table class="data-table"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div>`;
+  }
+
+  function loadEmployees()    {
+    loadTable('/api/admin/employees','emp-table-wrap','emp-table-error',
+      ['ID','Name','Phone','Pincode','Availability','Username'],
+      e=>[e.empId,e.name,e.phone,e.pincode,`<span class="badge badge-${e.availability.toLowerCase()}">${e.availability}</span>`,e.username]);
+  }
+  function loadAllCouriers()  {
+    loadTable('/api/admin/couriers','couriers-table-wrap','couriers-table-error',
+      ['Track ID','Receiver','Destination','Weight','Status','Cost','Payment','Employee'],
+      c=>['#'+c.trackingId,c.receiverName,c.destination,c.weight+'kg',
+          `<span class="badge badge-status">${c.status}</span>`,'₹'+c.cost,
+          `<span class="badge badge-${(c.paymentStatus||'').toLowerCase()}">${c.paymentStatus}</span>`,c.empUsername]);
+  }
+  function loadAllPayments()  {
+    loadTable('/api/admin/payments','payments-table-wrap','payments-table-error',
+      ['Pay ID','Track ID','Customer','Amount','Method','Status','Timestamp'],
+      p=>['#'+p.paymentId,'#'+p.trackingId,p.customerUsername,'₹'+p.amount,p.method,
+          `<span class="badge badge-paid">${p.status}</span>`,p.timestamp]);
+  }
+  function loadAllCustomers() {
+    loadTable('/api/admin/customers','customers-table-wrap','customers-table-error',
+      ['ID','Name','Phone','Username'],
+      c=>[c.customerId,c.name,c.phone,c.username]);
+  }
+
+  function downloadDailyReport() {
+    const btn = event.target;
+    btn.textContent = '⏳ Generating...';
+    btn.disabled = true;
+    fetch('/api/admin/couriers/daily-report')
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to generate report');
+        return res.blob();
+      })
+      .then(blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const today = new Date();
+        const dateStr = today.getDate() + '_' + (today.getMonth()+1) + '_' + today.getFullYear();
+        a.href = url;
+        a.download = 'daily_courier_report_' + dateStr + '.xlsx';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      })
+      .catch(err => alert('Error: ' + err.message))
+      .finally(() => { btn.textContent = '📥 Download Daily Report'; btn.disabled = false; });
+  }
+</script>
+</body>
+</html>

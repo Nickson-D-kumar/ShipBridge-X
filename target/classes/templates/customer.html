@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Customer Panel — Courier System</title>
+<link rel="stylesheet" th:href="@{/css/style.css}"/>
+</head>
+<body>
+<div class="app-container">
+
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">📬 Customer Panel</div>
+      <div class="header-right">
+        <span id="cust-name-badge" class="user-badge"></span>
+        <button class="btn btn-ghost-sm" onclick="logout()">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="main two-panel">
+
+    <nav class="sidebar">
+      <button class="menu-item active" onclick="showSection('book',this)">📦 Book Courier</button>
+      <button class="menu-item"        onclick="showSection('track',this)">🔍 Track Courier</button>
+      <button class="menu-item"        onclick="showSection('my-couriers',this)">📋 My Couriers</button>
+      <button class="menu-item"        onclick="showSection('my-payments',this)">💳 My Payments</button>
+    </nav>
+
+    <section class="content">
+
+      <!-- ── BOOK COURIER ─────────────────────────────── -->
+      <div id="sec-book" class="section-panel">
+        <h3>📦 Book a Courier</h3>
+        <div id="book-error"   class="alert alert-error   hidden"></div>
+        <div id="book-success" class="alert alert-success hidden"></div>
+        <div id="book-result"  class="result-card hidden"></div>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Receiver Name</label>
+            <input id="bk-recv" type="text" class="form-input" placeholder="Receiver's full name"/>
+          </div>
+          <div class="form-group">
+            <label>Destination</label>
+            <input id="bk-dest" type="text" class="form-input" placeholder="City / Address"/>
+          </div>
+          <div class="form-group">
+            <label>Destination Pincode</label>
+            <input id="bk-pin" type="number" class="form-input" placeholder="600001" min="100000" max="999999"/>
+          </div>
+          <div class="form-group">
+            <label>Weight (kg)</label>
+            <input id="bk-wt" type="number" class="form-input" placeholder="2.5" step="0.1" min="0.1"/>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Payment Method</label>
+          <div class="radio-group">
+            <label class="radio-label">
+              <input type="radio" name="payMethod" value="UPI"  onchange="togglePayFields()" checked/> 📱 UPI
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="payMethod" value="CARD" onchange="togglePayFields()"/> 💳 Card
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="payMethod" value="COD"  onchange="togglePayFields()"/> 💵 Cash on Delivery
+            </label>
+          </div>
+        </div>
+
+        <div id="upi-fields">
+          <div class="form-group">
+            <label>UPI ID</label>
+            <input id="bk-upi" type="text" class="form-input" placeholder="name@upi"/>
+          </div>
+        </div>
+        <div id="card-fields" class="hidden">
+          <div class="form-group">
+            <label>Card Number (16 digits)</label>
+            <input id="bk-card" type="text" class="form-input" placeholder="1234 5678 9012 3456" maxlength="19"/>
+          </div>
+          <div class="form-group">
+            <label>CVV (3 digits)</label>
+            <input id="bk-cvv" type="password" class="form-input" placeholder="123" maxlength="3"/>
+          </div>
+        </div>
+        <div id="cod-msg" class="hidden">
+          <p class="info-box">💵 You will pay in cash at delivery.</p>
+        </div>
+
+        <button id="book-btn" class="btn btn-primary" onclick="bookCourier()">Book Courier</button>
+      </div>
+
+      <!-- ── TRACK COURIER ─────────────────────────────── -->
+      <div id="sec-track" class="section-panel hidden">
+        <h3>🔍 Track Your Courier</h3>
+        <div id="track-error"  class="alert alert-error hidden"></div>
+        <div id="track-result" class="result-card hidden"></div>
+        <div class="form-group">
+          <label>Tracking ID</label>
+          <input id="trk-id" type="number" class="form-input" placeholder="e.g. 1" min="1"/>
+        </div>
+        <button class="btn btn-primary" onclick="trackCourier()">Track</button>
+      </div>
+
+      <!-- ── MY COURIERS ─────────────────────────────────── -->
+      <div id="sec-my-couriers" class="section-panel hidden">
+        <div class="section-header">
+          <h3>📋 My Couriers</h3>
+          <button class="btn btn-sm" onclick="loadMyCouriers()">🔄 Refresh</button>
+        </div>
+        <div id="my-couriers-error" class="alert alert-error hidden"></div>
+        <div id="my-couriers-wrap"></div>
+      </div>
+
+      <!-- ── MY PAYMENTS ─────────────────────────────────── -->
+      <div id="sec-my-payments" class="section-panel hidden">
+        <div class="section-header">
+          <h3>💳 My Payments</h3>
+          <button class="btn btn-sm" onclick="loadMyPayments()">🔄 Refresh</button>
+        </div>
+        <div id="my-payments-error" class="alert alert-error hidden"></div>
+        <div id="my-payments-wrap"></div>
+      </div>
+
+    </section>
+  </main>
+</div>
+
+<script th:inline="none">
+  /*<![CDATA[*/
+  /* ── Auth guard ──────────────────────────────────────────── */
+  const username = sessionStorage.getItem('username') || '';
+  const role     = sessionStorage.getItem('role')     || '';
+  if (role !== 'CUSTOMER') { window.location.href = '/'; }
+  document.getElementById('cust-name-badge').textContent = '👤 ' + username;
+
+  function logout() { sessionStorage.clear(); window.location.href = '/'; }
+
+  /* ── Sidebar navigation ───────────────────────────────────
+     FIX: Pass btn explicitly — never rely on the implicit
+     window.event global (breaks when clicking on text inside button) */
+  function showSection(id, btn) {
+    document.querySelectorAll('.section-panel').forEach(el => el.classList.add('hidden'));
+    document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
+    document.getElementById('sec-' + id).classList.remove('hidden');
+    if (btn) btn.classList.add('active');
+    if (id === 'my-couriers') loadMyCouriers();
+    if (id === 'my-payments') loadMyPayments();
+  }
+
+  /* ── Helpers ──────────────────────────────────────────────── */
+  function showMsg(id, msg, isError) {
+    const el = document.getElementById(id);
+    el.textContent = msg;
+    el.className = 'alert ' + (isError ? 'alert-error' : 'alert-success');
+    el.classList.remove('hidden');
+    // Keep error visible for 8 seconds so user can read it
+    setTimeout(() => el.classList.add('hidden'), 8000);
+  }
+  function hideMsg(id) { document.getElementById(id)?.classList.add('hidden'); }
+
+  function togglePayFields() {
+    const m = document.querySelector('input[name="payMethod"]:checked').value;
+    document.getElementById('upi-fields').classList.toggle('hidden',  m !== 'UPI');
+    document.getElementById('card-fields').classList.toggle('hidden', m !== 'CARD');
+    document.getElementById('cod-msg').classList.toggle('hidden',     m !== 'COD');
+  }
+
+  /* ── Shared fetch wrapper — catches network errors too ────── */
+  async function apiFetch(url, options) {
+    try {
+      const r    = await fetch(url, options);
+      const data = await r.json();
+      return { ok: r.ok, status: r.status, data };
+    } catch (err) {
+      return { ok: false, status: 0, data: { message: 'Network error — is the server running?' } };
+    }
+  }
+
+  /* ── BOOK COURIER ─────────────────────────────────────────── */
+  async function bookCourier() {
+    hideMsg('book-error');
+    hideMsg('book-success');
+    hideMsg('book-result');
+
+    /* — Client-side validation — */
+    const receiverName = document.getElementById('bk-recv').value.trim();
+    const destination  = document.getElementById('bk-dest').value.trim();
+    const pinRaw       = document.getElementById('bk-pin').value.trim();
+    const weightRaw    = document.getElementById('bk-wt').value.trim();
+    const method       = document.querySelector('input[name="payMethod"]:checked').value;
+
+    if (!username) {
+      showMsg('book-error', 'Session expired. Please logout and login again.', true); return;
+    }
+    if (!receiverName) { showMsg('book-error', 'Receiver name is required.', true); return; }
+    if (!destination)  { showMsg('book-error', 'Destination is required.', true); return; }
+
+    const pincode = parseInt(pinRaw, 10);
+    if (!pinRaw || isNaN(pincode) || pincode < 100000 || pincode > 999999) {
+      showMsg('book-error', 'Enter a valid 6-digit pincode (e.g. 600001).', true); return;
+    }
+    const weight = parseFloat(weightRaw);
+    if (!weightRaw || isNaN(weight) || weight <= 0) {
+      showMsg('book-error', 'Weight must be greater than 0 kg.', true); return;
+    }
+
+    let upiId = '', cardNumber = '', cvv = '';
+    if (method === 'UPI') {
+      upiId = document.getElementById('bk-upi').value.trim();
+      if (!upiId || !upiId.includes('@')) {
+        showMsg('book-error', 'Enter a valid UPI ID (e.g. name@upi or name@bank).', true); return;
+      }
+    }
+    if (method === 'CARD') {
+      cardNumber = document.getElementById('bk-card').value.replace(/\s+/g,'');
+      cvv        = document.getElementById('bk-cvv').value.trim();
+      if (!cardNumber || cardNumber.length !== 16 || !/^\d+$/.test(cardNumber)) {
+        showMsg('book-error', 'Enter a valid 16-digit card number.', true); return;
+      }
+      if (!cvv || cvv.length !== 3 || !/^\d+$/.test(cvv)) {
+        showMsg('book-error', 'Enter a valid 3-digit CVV.', true); return;
+      }
+    }
+
+    /* — Disable button while request runs — */
+    const btn = document.getElementById('book-btn');
+    btn.disabled = true;
+    btn.textContent = 'Booking...';
+
+    const { ok, data } = await apiFetch('/api/customer/couriers', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        senderUsername:     username,
+        receiverName,
+        destination,
+        destinationPincode: pincode,
+        weight,
+        paymentMethod:      method,
+        upiId,
+        cardNumber,
+        cvv
+      })
+    });
+
+    btn.disabled    = false;
+    btn.textContent = 'Book Courier';
+
+    if (!ok) {
+      showMsg('book-error', data.message || 'Booking failed — please try again.', true);
+      return;
+    }
+
+    /* — Success — */
+    const res = document.getElementById('book-result');
+    res.classList.remove('hidden');
+    res.innerHTML = `
+      <h4>✅ Courier Booked Successfully!</h4>
+      <div class="result-grid">
+        <div class="result-item"><span class="label">Tracking ID</span>
+          <span class="value">#${data.trackingId}</span></div>
+        <div class="result-item"><span class="label">Payment ID</span>
+          <span class="value">#${data.paymentId}</span></div>
+        <div class="result-item"><span class="label">Destination</span>
+          <span class="value">${data.destination}</span></div>
+        <div class="result-item"><span class="label">Weight</span>
+          <span class="value">${data.weight} kg</span></div>
+        <div class="result-item"><span class="label">Cost</span>
+          <span class="value">₹${data.cost}</span></div>
+        <div class="result-item"><span class="label">Assigned Employee</span>
+          <span class="value">${data.employee}</span></div>
+        <div class="result-item"><span class="label">Payment Method</span>
+          <span class="value">${data.paymentMethod}</span></div>
+        <div class="result-item"><span class="label">Payment Status</span>
+          <span class="value" style="color:#16a34a;font-weight:700">PAID ✅</span></div>
+      </div>`;
+
+    /* Clear form */
+    ['bk-recv','bk-dest','bk-pin','bk-wt','bk-upi','bk-card','bk-cvv']
+      .forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+    document.querySelector('input[name="payMethod"][value="UPI"]').checked = true;
+    togglePayFields();
+  }
+
+  /* ── TRACK COURIER ────────────────────────────────────────── */
+  async function trackCourier() {
+    hideMsg('track-error');
+    document.getElementById('track-result').classList.add('hidden');
+
+    const tidRaw = document.getElementById('trk-id').value.trim();
+    const tid    = parseInt(tidRaw, 10);
+    if (!tidRaw || isNaN(tid) || tid <= 0) {
+      showMsg('track-error', 'Enter a valid Tracking ID (a positive number).', true); return;
+    }
+
+    const { ok, data } = await apiFetch(`/api/customer/${username}/couriers/${tid}/track`);
+    if (!ok) {
+      showMsg('track-error', data.message || 'Tracking ID not found or does not belong to you.', true);
+      return;
+    }
+
+    const statusColors = {
+      'booked':           '#3b82f6',
+      'in transit':       '#f59e0b',
+      'out for delivery': '#8b5cf6',
+      'delivered':        '#10b981'
+    };
+    const sc = statusColors[(data.status||'').toLowerCase()] || '#6b7280';
+
+    const res = document.getElementById('track-result');
+    res.classList.remove('hidden');
+    res.innerHTML = `
+      <h4>📦 Tracking Report</h4>
+      <div class="result-grid">
+        <div class="result-item"><span class="label">Tracking ID</span>
+          <span class="value">#${data.trackingId}</span></div>
+        <div class="result-item"><span class="label">Receiver</span>
+          <span class="value">${data.receiverName}</span></div>
+        <div class="result-item"><span class="label">Destination</span>
+          <span class="value">${data.destination}</span></div>
+        <div class="result-item"><span class="label">Weight</span>
+          <span class="value">${data.weight}</span></div>
+        <div class="result-item"><span class="label">Cost</span>
+          <span class="value">${data.cost}</span></div>
+        <div class="result-item"><span class="label">Payment Status</span>
+          <span class="value">${data.paymentStatus}</span></div>
+        <div class="result-item"><span class="label">Status</span>
+          <span class="value" style="color:${sc};font-weight:700">${data.status}</span></div>
+        <div class="result-item"><span class="label">Est. Delivery</span>
+          <span class="value">${data.estimatedDelivery}</span></div>
+        <div class="result-item"><span class="label">Assigned Employee</span>
+          <span class="value">${data.assignedEmployee}</span></div>
+      </div>`;
+  }
+
+  /* ── MY COURIERS ──────────────────────────────────────────── */
+  async function loadMyCouriers() {
+    const wrap  = document.getElementById('my-couriers-wrap');
+    const errEl = document.getElementById('my-couriers-error');
+    errEl.classList.add('hidden');
+    wrap.innerHTML = '<p class="empty">⏳ Loading...</p>';
+
+    const { ok, data } = await apiFetch(`/api/customer/${username}/couriers`);
+    if (!ok) {
+      errEl.textContent = data.message || 'Failed to load couriers.';
+      errEl.classList.remove('hidden');
+      wrap.innerHTML = '';
+      return;
+    }
+    if (!Array.isArray(data) || data.length === 0) {
+      wrap.innerHTML = '<p class="empty">No couriers found. Book your first courier!</p>';
+      return;
+    }
+    wrap.innerHTML = buildTable(
+      ['Tracking ID','Receiver','Destination','Weight','Status','Cost','Payment'],
+      data.map(c => [
+        '#'+c.trackingId, c.receiverName, c.destination, c.weight+' kg',
+        `<span class="badge badge-status">${c.status}</span>`,
+        '₹'+c.cost,
+        `<span class="badge badge-${(c.paymentStatus||'').toLowerCase()}">${c.paymentStatus}</span>`
+      ])
+    );
+  }
+
+  /* ── MY PAYMENTS ──────────────────────────────────────────── */
+  async function loadMyPayments() {
+    const wrap  = document.getElementById('my-payments-wrap');
+    const errEl = document.getElementById('my-payments-error');
+    errEl.classList.add('hidden');
+    wrap.innerHTML = '<p class="empty">⏳ Loading...</p>';
+
+    const { ok, data } = await apiFetch(`/api/customer/${username}/payments`);
+    if (!ok) {
+      errEl.textContent = data.message || 'Failed to load payments.';
+      errEl.classList.remove('hidden');
+      wrap.innerHTML = '';
+      return;
+    }
+    if (!Array.isArray(data) || data.length === 0) {
+      wrap.innerHTML = '<p class="empty">No payment records yet.</p>';
+      return;
+    }
+    wrap.innerHTML = buildTable(
+      ['Pay ID','Tracking ID','Amount','Method','Status','Timestamp'],
+      data.map(p => [
+        '#'+p.paymentId, '#'+p.trackingId, '₹'+p.amount, p.method,
+        `<span class="badge badge-paid">${p.status}</span>`,
+        p.timestamp
+      ])
+    );
+  }
+
+  /* ── Table builder ────────────────────────────────────────── */
+  function buildTable(headers, rows) {
+    const ths = headers.map(h => `<th>${h}</th>`).join('');
+    const trs = rows.map(r =>
+      '<tr>' + r.map(cell => `<td>${cell}</td>`).join('') + '</tr>'
+    ).join('');
+    return `<div class="table-wrap"><table class="data-table">
+      <thead><tr>${ths}</tr></thead><tbody>${trs}</tbody>
+    </table></div>`;
+  }
+  /*]]>*/
+</script>
+</body>
+</html>
